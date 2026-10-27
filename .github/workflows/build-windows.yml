@@ -1,0 +1,43 @@
+# Builds the Windows program in the cloud, so you do not need Python or Node on your own PC.
+# Use: put this project in a private GitHub repository, open Actions > Build Windows app > Run workflow,
+# then download "HYSalesEngine-Setup" from the finished run.
+name: Build Windows app
+on: workflow_dispatch
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - name: Build the screens
+        working-directory: frontend
+        shell: cmd
+        run: |
+          npm install --no-audit --no-fund
+          set NEXT_PUBLIC_API_URL=
+          npm run build
+      - name: Copy the screens into the backend
+        shell: cmd
+        run: |
+          if exist backend\ui rmdir /s /q backend\ui
+          xcopy /e /i /y /q frontend\out backend\ui
+      - name: Package the program
+        working-directory: backend
+        shell: cmd
+        run: |
+          python -m pip install -r requirements.txt pyinstaller
+          python -m PyInstaller --noconfirm HYSalesEngine.spec
+      - name: Make the installer
+        shell: cmd
+        run: |
+          mkdir dist
+          xcopy /e /i /y /q backend\dist\HYSalesEngine dist\HYSalesEngine
+          choco install innosetup -y --no-progress
+          "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\HYSalesEngine.iss
+      - uses: actions/upload-artifact@v4
+        with: { name: HYSalesEngine-Setup, path: installer/Output/HYSalesEngine-Setup.exe }
+      - uses: actions/upload-artifact@v4
+        with: { name: HYSalesEngine-portable, path: dist/HYSalesEngine }
